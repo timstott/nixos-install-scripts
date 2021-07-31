@@ -45,16 +45,42 @@ sgdisk -d 1 /dev/sda
 sgdisk -N 1 /dev/sda
 partprobe /dev/sda
 
-mkfs.ext4 -F /dev/sda1 # wipes all data!
+ZFS=/dev/sda1
 
-mount /dev/sda1 /mnt
+zpool create -f -m none -R /mnt \
+  -o ashift=12 \
+  -O compression=lz4 \
+  rpool "$ZFS"
+
+zfs create -p -o mountpoint=legacy rpool/local/root
+zfs snapshot rpool/local/root@blank
+mount -t zfs rpool/local/root /mnt
+
+zfs create -p -o mountpoint=legacy rpool/local/nix
+mkdir /mnt/nix
+mount -t zfs rpool/local/nix /mnt/nix
+
+zfs create -p -o mountpoint=legacy rpool/safe/home
+mkdir /mnt/home
+mount -t zfs rpool/safe/home /mnt/home
+
+zfs create -p -o mountpoint=legacy rpool/safe/persist
+mkdir /mnt/persist
+mount -t zfs rpool/safe/persist /mnt/persist
 
 nixos-generate-config --root /mnt
 
 # Delete trailing `}` from `configuration.nix` so that we can append more to it.
 sed -i -E 's:^\}\s*$::g' /mnt/etc/nixos/configuration.nix
 
+HOSTID=$(head -c8 /etc/machine-id)
+
 # Extend/override default `configuration.nix`:
+echo "
+  networking.hostId = \"$HOSTID\";
+  boot.zfs.devNodes = \"$ZFS\";
+" >> /mnt/etc/nixos/configuration.nix
+
 echo '
   boot.loader.grub.devices = [ "/dev/sda" ];
 
@@ -66,7 +92,7 @@ echo '
 
   users.users.root.openssh.authorizedKeys.keys = [
     # Replace this by your SSH pubkey!
-    "ssh-rsa AAAAAAAAAAA..."
+    "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDQ4w+/Ziw/oRMOJB9UwxTe0bOe8BCNfwHG2GFwoctJ/h7sYKvYs4shG3ZqxYqOWvFRCrR6gfrMXnXYOX5xJwk0emHYbiB4uF20ufH0OpVWKEA4N0ncn0rtvR7pGnPjEcnqqUf6NKtUvALi1d2kTVK75Wx7cep8zorL5Kc96CJLCI15Z8Km1JankOlBTEObExY2MP0VhZXgcWDA0mBjL25mQe3ieivtZw8Y+/0hHvTXgafW+TmjkuInGFcDYpGCTCaoLL95IJs9AN5aIHClzCDF6sCuAbMXJhowblLOqAhULnez8BD93LYDFAXY1R9LlfsAbsx4SeHvqlE3ds9jLpv1"
   ];
 }
 ' >> /mnt/etc/nixos/configuration.nix
