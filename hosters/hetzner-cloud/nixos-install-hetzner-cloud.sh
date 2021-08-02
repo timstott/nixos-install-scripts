@@ -48,6 +48,7 @@ sgdisk -d 1 /dev/sda
 # - partition size is 500Mib
 sgdisk -n 1:0:500Mib /dev/sda
 
+sgdisk -d 2 /dev/sda
 # Create partition for ZFS
 # - partition number 2
 # - fills the biggest available section of the disk
@@ -57,6 +58,8 @@ partprobe /dev/sda
 
 BOOT=/dev/sda1
 ZFS=/dev/sda2
+
+mkfs.vfat "$BOOT"
 
 zpool create -f -m none -R /mnt \
   -o ashift=12 \
