@@ -42,10 +42,21 @@ set -e
 # first powerup, that does not happen. Thus we need to grow the partition
 # by deleting and re-creating it.
 sgdisk -d 1 /dev/sda
-sgdisk -N 1 /dev/sda
+
+# Create partition for boot
+# - partition number 1
+# - partition size is 500Mib
+sgdisk -n 1:0:500Mib /dev/sda
+
+# Create partition for ZFS
+# - partition number 2
+# - fills the biggest available section of the disk
+sgdisk -N 2 /dev/sda
+
 partprobe /dev/sda
 
-ZFS=/dev/sda1
+BOOT=/dev/sda1
+ZFS=/dev/sda2
 
 zpool create -f -m none -R /mnt \
   -o ashift=12 \
@@ -67,6 +78,9 @@ mount -t zfs rpool/safe/home /mnt/home
 zfs create -p -o mountpoint=legacy rpool/safe/persist
 mkdir /mnt/persist
 mount -t zfs rpool/safe/persist /mnt/persist
+
+mkdir /mnt/boot
+mount "$BOOT" /mnt/boot
 
 nixos-generate-config --root /mnt
 
@@ -98,5 +112,3 @@ echo '
 ' >> /mnt/etc/nixos/configuration.nix
 
 nixos-install --no-root-passwd
-
-poweroff
